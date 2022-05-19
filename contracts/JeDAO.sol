@@ -5,17 +5,16 @@ pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract JeDAO {
+contract JeDAO is ReentrancyGuard {
     address public chairman;
-    address private _voteToken;
     uint256 private _minQuorum;
     uint256 private _debatePeriod;
     uint256 private _proposalID;
+    ERC20 private _voteToken;
 
     struct Proposal {
         uint256 finishTime; 
@@ -38,7 +37,7 @@ contract JeDAO {
 
     constructor(
         address chairPerson,
-        address voteToken,
+        ERC20 voteToken,
         uint256 minimumQuorum,
         uint256 debatingPeriodDuration
     ) {
@@ -56,9 +55,9 @@ contract JeDAO {
 
 
     function addProposal(
-        bytes calldata callData,
+        bytes memory callData,
         address _recipient,
-        string calldata description
+        string memory description
     ) external onlyChairman returns(uint256) {
         Proposal storage newProposal = _proposals[_proposalID];
         _proposalID++;
@@ -99,14 +98,17 @@ contract JeDAO {
     }
 
 
-    function finishProposal(uint256 proposalID) external view returns(bool) {
+    function finishProposal(uint256 proposalID) external returns(bool) {
         Proposal storage proposal = _proposals[proposalID];
-        uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
+        require(block.timestamp >= proposal.finishTime, "Proposal is not active");
 
+        uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
         require(totalVotes >= _minQuorum, "Not enough votes");
 
         if(proposal.votesFor > proposal.votesAgainst) {
-            // TODO: execute function
+            (bool success, ) = proposal.recipient.call(proposal.callData);
+
+             require(success, "Operation failed");
         }
 
         return true;
@@ -114,21 +116,20 @@ contract JeDAO {
 
 
     function deposit(uint256 amount) external returns(bool) {
-        // TODO: transfer tokens to contract
+        _voteToken.transferFrom(msg.sender, address(this), amount);
         _voters[msg.sender].deposit += amount;
 
         return true;
     }
     
 
-    function withdraw(uint256 amount) external returns(bool) {
+    function withdraw(uint256 amount) external nonReentrant returns(bool) {
         Voter storage voter = _voters[msg.sender];
 
         require(block.timestamp >= voter.withdrawTime, "Can't withdraw yet");
         require(voter.deposit >= amount, "Not enough tokens");
 
-        // TODO: transfer tokens back to voter
-
+        _voteToken.transferFrom(address(this), msg.sender, amount);
         voter.deposit -= amount;
 
         return true;
