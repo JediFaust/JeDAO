@@ -3,7 +3,7 @@
 pragma solidity ^0.8.4;
 
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "./ERC20MintableBurnable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract JeDAO is ReentrancyGuard {
@@ -11,7 +11,7 @@ contract JeDAO is ReentrancyGuard {
     uint256 private _minQuorum;
     uint256 private _debatePeriod;
     uint256 private _proposalID;
-    ERC20 private _voteToken;
+    ERC20MintableBurnable private _voteToken;
 
     struct Proposal {
         uint256 finishTime; 
@@ -34,12 +34,12 @@ contract JeDAO is ReentrancyGuard {
 
     constructor(
         address chairPerson,
-        ERC20 voteToken,
+        address voteToken,
         uint256 minimumQuorum,
         uint256 debatingPeriodDuration
     ) {
         chairman = chairPerson;
-        _voteToken = voteToken;
+        _voteToken = ERC20MintableBurnable(voteToken);
         _minQuorum = minimumQuorum;
         _debatePeriod = debatingPeriodDuration;
     }
@@ -76,7 +76,7 @@ contract JeDAO is ReentrancyGuard {
         Proposal storage proposal = _proposals[proposalID];
         Voter storage voter = _voters[msg.sender];
 
-        require(block.timestamp < proposal.finishTime, "Proposal is not active");
+        require(proposal.finishTime > 0, "Proposal is not active");
         require(voter.deposit - voter.votedAmount[proposalID] >= amount, "Not enough tokens");
 
         if(isVoteFor) {
@@ -94,19 +94,21 @@ contract JeDAO is ReentrancyGuard {
         return true;
     }
 
-
     function finishProposal(uint256 proposalID) external returns(bool) {
         Proposal storage proposal = _proposals[proposalID];
-        require(block.timestamp >= proposal.finishTime, "Proposal is not active");
+        require(block.timestamp >= proposal.finishTime, "Proposal is not finished");
 
         uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
         require(totalVotes >= _minQuorum, "Not enough votes");
 
         if(proposal.votesFor > proposal.votesAgainst) {
-            (bool success, ) = proposal.recipient.call(proposal.callData);
+            (bool success, ) = proposal.recipient.call{value: 0}
+                (proposal.callData);
 
              require(success, "Operation failed");
         }
+
+        proposal.finishTime = 0;
 
         return true;
     }
@@ -126,10 +128,9 @@ contract JeDAO is ReentrancyGuard {
         require(block.timestamp >= voter.withdrawTime, "Can't withdraw yet");
         require(voter.deposit >= amount, "Not enough tokens");
 
-        _voteToken.transferFrom(address(this), msg.sender, amount);
+        _voteToken.transfer(msg.sender, amount);
         voter.deposit -= amount;
 
         return true;
     }
-
 }

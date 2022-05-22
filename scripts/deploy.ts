@@ -1,25 +1,31 @@
+/* eslint-disable prefer-const */
 // We require the Hardhat Runtime Environment explicitly here. This is optional
 // but useful for running the script in a standalone fashion through `node <script>`.
 //
 // When running the script with `npx hardhat run <script>` you'll find the Hardhat
 // Runtime Environment's members available in the global scope.
 import { ethers } from "hardhat";
+import { Contract } from "ethers";
+
+/*
+  Optional ERC20MintableBurnable contract
+  may be deployed with commented out code below
+*/
 
 async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
+  let jeDAO: Contract;
 
-  // We get the contract to deploy
-  const Greeter = await ethers.getContractFactory("Greeter");
-  const greeter = await Greeter.deploy("Hello, Hardhat!");
+  const totalAmount = 10000000;
+  const three_days = 3 * 24 * 60 * 60;
 
-  await greeter.deployed();
+  const JeDAO = await ethers.getContractFactory("JeDAO");
+  jeDAO = <Contract>(
+    await JeDAO.deploy(process.env.CHAIRMAN_ADDRESS, process.env.CONTRACT_ADDRESS_ERC20, totalAmount / 4, three_days)
+  );
 
-  console.log("Greeter deployed to:", greeter.address);
+  await jeDAO.deployed();
+
+  console.log("JeDAO deployed to:", jeDAO.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
